@@ -7,10 +7,12 @@ from flask_migrate import Migrate
 from flask_swagger import swagger
 from flask_cors import CORS
 from api.utils import APIException, generate_sitemap
-from api.models import db
+from api.models import db, User
 from api.routes import api
 from api.admin import setup_admin
 from api.commands import setup_commands
+import datetime #nos ayuda a trabajar con fecha y hora
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity 
 
 #from models import Person
 
@@ -39,6 +41,9 @@ setup_admin(app)
 # add the admin
 setup_commands(app)
 
+#iniciar JWT
+jwt = JWTManager(app)
+
 # Add all endpoints form the API with a "api" prefix
 app.register_blueprint(api, url_prefix='/api')
 
@@ -54,6 +59,34 @@ def sitemap():
         return generate_sitemap(app)
     return send_from_directory(static_file_dir, 'index.html')
 
+
+@app.route('/login', methods=['POST'])
+def iniciar_sesion():
+    request_body = request.get_json()
+    print(request_body)
+    user = User.query.filter_by(email=request_body['email']).first()
+    if user:
+        if user.password == request_body['password']:
+            tiempo = datetime.timedelta(minutes=1)
+            #create_access_token(Quien soy, por cuanto tiempo)
+            acceso = create_access_token(identity = user.email, 
+            expires_delta=tiempo)
+            return jsonify({
+                "mensaje": "inicio de sesion correcto :D",
+                "duracion": tiempo.total_seconds(),
+                "token": acceso
+            })
+
+        else:
+            return "Clave Incorrecta :("
+    else:
+        return "user no existe", 400
+#tipo de token = Bearer TOken
+@app.route('/privada', methods=['GET'])
+@jwt_required()
+def privada():
+    identidad = get_jwt_identity() #saber quien es (defini "identity = email")
+    return jsonify({"Acceso":"Concedido,Bienvenida, "+identidad})
 # any other endpoint will try to serve it like a static file
 @app.route('/<path:path>', methods=['GET'])
 def serve_any_other_file(path):
